@@ -1,0 +1,278 @@
+```html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seminar Nasional 2026 - QR Check-in</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
+      background: #f4f6f8;
+      color: #202124;
+    }
+
+    h2 { margin-bottom: 8px; }
+    h4 { line-height: 1.5; }
+    .subtitle { color: #5f6368; }
+
+    .card {
+      background: white;
+      padding: 18px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px #00000012;
+    }
+
+    input, button {
+      width: 100%;
+      padding: 13px;
+      margin-top: 10px;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    input { border: 1px solid #dadce0; }
+
+    button {
+      border: 0;
+      background: #185abc;
+      color: white;
+      font-weight: bold;
+    }
+
+    button:disabled {
+      background: #9aa0a6;
+    }
+
+    #result {
+      display: none;
+      margin-top: 15px;
+      padding: 15px;
+      border-radius: 8px;
+      overflow-wrap: anywhere;
+    }
+
+    .success { background: #e6f4ea; color: #137333; }
+    .error { background: #fce8e6; color: #b3261e; }
+    .info { background: #e8f0fe; color: #174ea6; }
+
+    .seat {
+      font-size: 22px;
+      font-weight: bold;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Seminario Nasional 2026</h2>
+  <h4>ORDENAMENTO TERRITÓRIO BA TIMOR-LESTE NIA DEZENVOLVIMENTU SUSTENTAVEL</h4>
+  <p class="subtitle">QR Check-in Partisipante</p>
+
+  <div class="card">
+    <label for="staff"><b>Nama petugas check-in</b></label>
+    <input id="staff" placeholder="Masukkan nama petugas">
+
+    <button id="startBtn" onclick="startScanner()">
+      Aktifkan Kamera dan Scan QR
+    </button>
+
+    <button id="stopBtn" onclick="stopScanner()" disabled>
+      Hentikan Kamera
+    </button>
+
+    <div id="reader" style="margin-top:15px"></div>
+    <div id="result" role="status" aria-live="polite"></div>
+  </div>
+
+  <script>
+    // URL backend akan diisi setelah deployment Apps Script diperiksa.
+    const SCRIPT_URL = "GANTI_DENGAN_URL_WEB_APP_APPS_SCRIPT";
+
+    let scanner = null;
+    let processing = false;
+    let cameraRunning = false;
+
+    const resultBox = document.getElementById("result");
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+
+    function showResult(message, type, data) {
+      resultBox.className = type;
+      resultBox.style.display = "block";
+
+      let html = "<b>" + escapeHtml(message) + "</b>";
+
+      if (data) {
+        html += "<hr>";
+        html += "<div><b>Nama:</b> " +
+          escapeHtml(data.fullName || "-") + "</div>";
+        html += "<div><b>ID Pendaftaran:</b> " +
+          escapeHtml(data.registrationId || "-") + "</div>";
+        html += "<div><b>Institusi:</b> " +
+          escapeHtml(data.institution || "-") + "</div>";
+        html += '<div class="seat">Meja ' +
+          escapeHtml(data.desk || "-") + " · Kursi " +
+          escapeHtml(data.seat || "-") + "</div>";
+      }
+
+      resultBox.innerHTML = html;
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? "" : value).replace(
+        /[&<>"']/g,
+        function(ch) {
+          return {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;"
+          }[ch];
+        }
+      );
+    }
+
+    async function startScanner() {
+      if (!document.getElementById("staff").value.trim()) {
+        showResult("Masukkan nama petugas terlebih dahulu.", "error");
+        return;
+      }
+
+      if (typeof Html5Qrcode === "undefined") {
+        showResult("Library scanner gagal dimuat. Periksa koneksi internet.", "error");
+        return;
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showResult("Browser tidak menyediakan akses kamera.", "error");
+        return;
+      }
+
+      startBtn.disabled = true;
+
+      try {
+        scanner = new Html5Qrcode("reader");
+
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 230, height: 230 } },
+          onScanSuccess,
+          function() {}
+        );
+
+        cameraRunning = true;
+        stopBtn.disabled = false;
+        showResult("Kamera aktif. Arahkan ke QR Code peserta.", "info");
+
+      } catch (error) {
+        scanner = null;
+        cameraRunning = false;
+        startBtn.disabled = false;
+        showResult(
+          "Gagal membuka kamera: " +
+          (error.message || String(error)),
+          "error"
+        );
+      }
+    }
+
+    async function onScanSuccess(decodedText) {
+      if (processing) return;
+      processing = true;
+
+      const token = String(decodedText || "").trim();
+      const staff = document.getElementById("staff").value.trim();
+
+      try {
+        if (scanner && cameraRunning) {
+          await scanner.stop();
+          cameraRunning = false;
+        }
+      } catch (error) {
+        console.warn(error);
+      }
+
+      stopBtn.disabled = true;
+
+      if (!token) {
+        showResult("QR Code kosong atau tidak terbaca.", "error");
+        processing = false;
+        startBtn.disabled = false;
+        return;
+      }
+
+      if (SCRIPT_URL.indexOf("GANTI_DENGAN_URL") !== -1) {
+        showResult(
+          "Kamera berhasil membaca QR. URL backend Apps Script belum diatur.",
+          "info"
+        );
+        processing = false;
+        startBtn.disabled = false;
+        return;
+      }
+
+      try {
+        const response = await fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "checkIn",
+            qrToken: token,
+            petugas: staff
+          }),
+          redirect: "follow"
+        });
+
+        const result = await response.json();
+
+        if (result.ok) {
+          showResult(result.message || "CHECK-IN BERHASIL", "success", result);
+        } else {
+          showResult(
+            result.message || "Check-in gagal.",
+            "error",
+            result.registrationId ? result : null
+          );
+        }
+
+      } catch (error) {
+        showResult(
+          "Tidak dapat menghubungi server check-in. Periksa konfigurasi backend.",
+          "error"
+        );
+        console.error(error);
+      } finally {
+        processing = false;
+        startBtn.disabled = false;
+      }
+    }
+
+    async function stopScanner() {
+      try {
+        if (scanner && cameraRunning) {
+          await scanner.stop();
+        }
+      } catch (error) {
+        console.warn(error);
+      }
+
+      scanner = null;
+      cameraRunning = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      showResult("Kamera dihentikan.", "info");
+    }
+  </script>
+</body>
+</html>
+```
