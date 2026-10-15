@@ -1,10 +1,9 @@
-.
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Seminar Nasional 2026 - QR Check-in</title>
+  <title>Seminario Nasional 2026 - QR Check-in</title>
 
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
@@ -46,10 +45,12 @@
       background: #185abc;
       color: white;
       font-weight: bold;
+      cursor: pointer;
     }
 
     button:disabled {
       background: #9aa0a6;
+      cursor: wait;
     }
 
     #result {
@@ -69,17 +70,34 @@
       font-weight: bold;
       margin-top: 12px;
     }
+
+    hr {
+      border: 0;
+      border-top: 1px solid #dadce0;
+      margin: 12px 0;
+    }
   </style>
 </head>
 
 <body>
   <h2>Seminario Nasional 2026</h2>
-  <h4>ORDENAMENTO TERRITÓRIO BA TIMOR-LESTE NIA DEZENVOLVIMENTU SUSTENTAVEL</h4>
+
+  <h4>
+    ORDENAMENTO TERRITÓRIO BA TIMOR-LESTE NIA
+    DEZENVOLVIMENTU SUSTENTAVEL
+  </h4>
+
   <p class="subtitle">QR Check-in Partisipante</p>
 
   <div class="card">
     <label for="staff"><b>Operador ba check-in</b></label>
-    <input id="staff" placeholder="Prense naran">
+
+    <input
+      id="staff"
+      type="text"
+      placeholder="Prense naran"
+      autocomplete="name"
+    >
 
     <button id="startBtn" onclick="startScanner()">
       Aktifkan Kamera dan Scan QR
@@ -90,42 +108,24 @@
     </button>
 
     <div id="reader" style="margin-top:15px"></div>
+
     <div id="result" role="status" aria-live="polite"></div>
   </div>
 
   <script>
-    // URL backend akan diisi setelah deployment Apps Script diperiksa.
-    const SCRIPT_URL = "GANTI_DENGAN_URL_WEB_APP_APPS_SCRIPT";
+    // URL Web App Google Apps Script Anda.
+    const SCRIPT_URL =
+      "https://script.google.com/macros/s/AKfycbyJp4TnT_C_0GmXjYRDLj0ymlGfekhgNxjeuzdXJvxAltgLsuG6_BwlHfs70UqraPDM/exec";
 
     let scanner = null;
     let processing = false;
     let cameraRunning = false;
+    let requestTimer = null;
+    let requestScript = null;
 
     const resultBox = document.getElementById("result");
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
-
-    function showResult(message, type, data) {
-      resultBox.className = type;
-      resultBox.style.display = "block";
-
-      let html = "<b>" + escapeHtml(message) + "</b>";
-
-      if (data) {
-        html += "<hr>";
-        html += "<div><b>Nama:</b> " +
-          escapeHtml(data.fullName || "-") + "</div>";
-        html += "<div><b>ID Pendaftaran:</b> " +
-          escapeHtml(data.registrationId || "-") + "</div>";
-        html += "<div><b>Institusi:</b> " +
-          escapeHtml(data.institution || "-") + "</div>";
-        html += '<div class="seat">Meja ' +
-          escapeHtml(data.desk || "-") + " · Kursi " +
-          escapeHtml(data.seat || "-") + "</div>";
-      }
-
-      resultBox.innerHTML = html;
-    }
 
     function escapeHtml(value) {
       return String(value == null ? "" : value).replace(
@@ -142,19 +142,59 @@
       );
     }
 
+    function showResult(message, type, data) {
+      resultBox.className = type;
+      resultBox.style.display = "block";
+
+      let html = "<b>" + escapeHtml(message) + "</b>";
+
+      if (data) {
+        html += "<hr>";
+
+        html += "<div><b>Nama:</b> " +
+          escapeHtml(data.fullName || "-") + "</div>";
+
+        html += "<div><b>ID Pendaftaran:</b> " +
+          escapeHtml(data.registrationId || "-") + "</div>";
+
+        html += "<div><b>Institusi:</b> " +
+          escapeHtml(data.institution || "-") + "</div>";
+
+        html += '<div class="seat">Meja ' +
+          escapeHtml(data.desk || "-") + " · Kursi " +
+          escapeHtml(data.seat || "-") + "</div>";
+      }
+
+      resultBox.innerHTML = html;
+    }
+
     async function startScanner() {
-      if (!document.getElementById("staff").value.trim()) {
-        showResult("Masukkan nama petugas terlebih dahulu.", "error");
+      const staff = document.getElementById("staff").value.trim();
+
+      if (!staff) {
+        showResult(
+          "Hatama uluk naran operador check-in.",
+          "error"
+        );
         return;
       }
 
       if (typeof Html5Qrcode === "undefined") {
-        showResult("Library scanner gagal dimuat. Periksa koneksi internet.", "error");
+        showResult(
+          "Library scanner la konsege karrega. Verifika internet.",
+          "error"
+        );
         return;
       }
 
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showResult("Browser tidak menyediakan akses kamera.", "error");
+      if (
+        !navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia
+      ) {
+        showResult(
+          "Browser la permite asesu kamera.",
+          "error"
+        );
         return;
       }
 
@@ -165,96 +205,194 @@
 
         await scanner.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 230, height: 230 } },
+          {
+            fps: 10,
+            qrbox: { width: 230, height: 230 }
+          },
           onScanSuccess,
           function() {}
         );
 
         cameraRunning = true;
         stopBtn.disabled = false;
-        showResult("Kamera aktif. Arahkan ke QR Code peserta.", "info");
+
+        showResult(
+          "Kamera ativu. Aponta ba QR Code partisipante.",
+          "info"
+        );
 
       } catch (error) {
         scanner = null;
         cameraRunning = false;
         startBtn.disabled = false;
+
         showResult(
-          "Gagal membuka kamera: " +
+          "La konsege ativa kamera: " +
           (error.message || String(error)),
           "error"
         );
       }
     }
 
+    // Dipanggil saat QR Code berhasil dibaca.
     async function onScanSuccess(decodedText) {
       if (processing) return;
-      processing = true;
 
       const token = String(decodedText || "").trim();
       const staff = document.getElementById("staff").value.trim();
 
+      if (!token || !staff) {
+        showResult(
+          "QR Code ka naran operador la kompletu.",
+          "error"
+        );
+        return;
+      }
+
+      processing = true;
+      startBtn.disabled = true;
+
+      // Hentikan kamera selama server memproses check-in.
       try {
         if (scanner && cameraRunning) {
           await scanner.stop();
           cameraRunning = false;
         }
       } catch (error) {
-        console.warn(error);
+        console.warn("Kamera:", error);
       }
 
       stopBtn.disabled = true;
 
-      if (!token) {
-        showResult("QR Code kosong atau tidak terbaca.", "error");
+      showResult(
+        "QR Code hetan. Kontaktu servidor check-in...",
+        "info"
+      );
+
+      sendCheckIn(token, staff);
+    }
+
+    // Mengirim permintaan JSONP ke Apps Script.
+    function sendCheckIn(token, staff) {
+      cleanupRequest();
+
+      const callbackName =
+        "seminarCallback_" +
+        Date.now() + "_" +
+        Math.floor(Math.random() * 1000000);
+
+      let completed = false;
+
+      function finish() {
+        if (completed) return;
+        completed = true;
+
+        cleanupRequest();
         processing = false;
         startBtn.disabled = false;
-        return;
+        stopBtn.disabled = true;
       }
 
-      if (SCRIPT_URL.indexOf("GANTI_DENGAN_URL") !== -1) {
-        showResult(
-          "Kamera berhasil membaca QR. URL backend Apps Script belum diatur.",
-          "info"
-        );
-        processing = false;
-        startBtn.disabled = false;
-        return;
-      }
+      window[callbackName] = function(response) {
+        finish();
 
-      try {
-        const response = await fetch(SCRIPT_URL, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "checkIn",
-            qrToken: token,
-            petugas: staff
-          }),
-          redirect: "follow"
-        });
-
-        const result = await response.json();
-
-        if (result.ok) {
-          showResult(result.message || "CHECK-IN BERHASIL", "success", result);
-        } else {
+        if (!response) {
           showResult(
-            result.message || "Check-in gagal.",
-            "error",
-            result.registrationId ? result : null
+            "Servidor la fó resposta válida.",
+            "error"
           );
+          return;
         }
 
+        if (response.ok) {
+          showResult(
+            response.message || "CHECK-IN SUSSESU",
+            "success",
+            response
+          );
+        } else if (response.duplicate) {
+          showResult(
+            response.message || "PARTISIPANTE HALO CHECK-IN ONA.",
+            "error",
+            response
+          );
+        } else {
+          showResult(
+            response.message || "Check-in la konsege.",
+            "error",
+            response.registrationId ? response : null
+          );
+        }
+      };
+
+      try {
+        const url = new URL(SCRIPT_URL);
+
+        url.searchParams.set("action", "checkIn");
+        url.searchParams.set("qrToken", token);
+        url.searchParams.set("petugas", staff);
+        url.searchParams.set("callback", callbackName);
+        url.searchParams.set("_", String(Date.now()));
+
+        requestScript = document.createElement("script");
+        requestScript.src = url.toString();
+        requestScript.async = true;
+
+        requestScript.onerror = function() {
+          finish();
+
+          showResult(
+            "La konsege kontaktu Apps Script. Verifika URL no deployment.",
+            "error"
+          );
+        };
+
+        requestTimer = setTimeout(function() {
+          finish();
+
+          showResult(
+            "Servidor la fó resposta. Verifika koneksaun no deployment.",
+            "error"
+          );
+        }, 25000);
+
+        document.head.appendChild(requestScript);
+
       } catch (error) {
+        finish();
+
         showResult(
-          "Tidak dapat menghubungi server check-in. Periksa konfigurasi backend.",
+          "Erru koneksaun: " + error.message,
           "error"
         );
-        console.error(error);
-      } finally {
-        processing = false;
-        startBtn.disabled = false;
       }
+    }
+
+    function cleanupRequest() {
+      if (requestTimer) {
+        clearTimeout(requestTimer);
+        requestTimer = null;
+      }
+
+      if (requestScript) {
+        requestScript.onload = null;
+        requestScript.onerror = null;
+
+        if (requestScript.parentNode) {
+          requestScript.parentNode.removeChild(requestScript);
+        }
+
+        requestScript = null;
+      }
+
+      // Hapus callback yang sudah tidak digunakan.
+      Object.keys(window).forEach(function(key) {
+        if (key.indexOf("seminarCallback_") === 0) {
+          try {
+            delete window[key];
+          } catch (error) {}
+        }
+      });
     }
 
     async function stopScanner() {
@@ -263,16 +401,17 @@
           await scanner.stop();
         }
       } catch (error) {
-        console.warn(error);
+        console.warn("Kamera:", error);
       }
 
       scanner = null;
       cameraRunning = false;
       startBtn.disabled = false;
       stopBtn.disabled = true;
-      showResult("Kamera dihentikan.", "info");
+
+      showResult("Kamera para ona.", "info");
     }
   </script>
 </body>
 </html>
-...
+```
